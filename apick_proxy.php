@@ -38,6 +38,12 @@ if ($action === 'view') {
         exit;
     }
 
+    // 고유번호 하이픈 포맷: 14자리 숫자 → XXXX-XXXX-XXXXXX
+    $rawPin = preg_replace('/[^0-9]/', '', $pin);
+    if (strlen($rawPin) === 14 && strpos($pin, '-') === false) {
+        $pin = substr($rawPin, 0, 4) . '-' . substr($rawPin, 4, 4) . '-' . substr($rawPin, 8);
+    }
+
     $ch = curl_init('https://apick.app/rest/iros/1');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
