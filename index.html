@@ -262,6 +262,7 @@
   <div class="hint">주소를 입력하면 자동검색됩니다. 집합건물은 동/호 선택 후 조회하세요.</div>
 
   <div class="drive-result" id="driveResult"></div>
+  <div class="drive-result" id="driveBuildingResult"></div>
 
   <div class="status" id="status"></div>
 
@@ -279,6 +280,7 @@ var GOOGLE_CLIENT_ID = '249341595591-s3avo8cono8qqbuib8vqh1esreru2mom.apps.googl
 var ALLOWED_DOMAIN = 'smilersa.com';
 var OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 var DRIVE_FOLDER_ID = '1uyJSidstWlvCUCNcQYpmt_ml54ZlXInm';
+var DRIVE_BUILDING_FOLDER_ID = '1jjgYw7DDv75qLSLhG9V4_h1NxHbZZ3tl';
 
 var driveToken = null;
 
@@ -375,36 +377,30 @@ function logout() {
   location.reload();
 }
 
-// ── Google Drive에서 등기부 PDF 검색
-function searchDrive(jibunAddress) {
+// ── Google Drive 폴더에서 PDF 검색 (범용)
+function searchDriveFolder(folderId, elementId, label, jibunAddress) {
   if (!driveToken) return;
 
-  var driveResultEl = document.getElementById('driveResult');
-  driveResultEl.className = 'drive-result searching';
-  driveResultEl.textContent = 'Google Drive에서 등기부 검색 중...';
+  var el = document.getElementById(elementId);
+  el.className = 'drive-result searching';
+  el.textContent = 'Google Drive에서 ' + label + ' 검색 중...';
 
-  // 지번주소에서 구, 동, 번지 추출
-  // 예: "부산광역시 해운대구 우동 1234-5" → ["해운대구 우동 1234", "우동 1234"]
   var parts = jibunAddress.replace(/^\s+/, '').split(/\s+/);
-  var gu = '', dong = '', beonji = '';
+  var dong = '', beonji = '';
   for (var i = 0; i < parts.length; i++) {
-    if (parts[i].endsWith('구')) gu = parts[i];
     if (parts[i].endsWith('동') || parts[i].endsWith('리')) dong = parts[i];
     if (/^\d/.test(parts[i])) { beonji = parts[i].replace(/-0$/, ''); break; }
   }
 
   if (!dong || !beonji) {
-    driveResultEl.className = 'drive-result not-found';
-    driveResultEl.textContent = '지번 주소를 파싱할 수 없습니다.';
+    el.className = 'drive-result not-found';
+    el.textContent = label + ' — 지번 주소를 파싱할 수 없습니다.';
     return;
   }
 
-  // 번지에서 본번만 추출 (1234-5 → 1234)
   var mainBeonji = beonji.split('-')[0];
-
-  // "동 번지" 로 검색 (광범위하게 매칭)
   var searchTerm = dong + ' ' + mainBeonji;
-  var query = "'" + DRIVE_FOLDER_ID + "' in parents"
+  var query = "'" + folderId + "' in parents"
     + " and mimeType='application/pdf'"
     + " and name contains '" + searchTerm + "'"
     + " and trashed=false";
@@ -423,8 +419,8 @@ function searchDrive(jibunAddress) {
     if (res.status === 401) {
       driveToken = null;
       sessionStorage.removeItem('drive_token');
-      driveResultEl.className = 'drive-result not-found';
-      driveResultEl.textContent = '토큰 만료 — 로그아웃 후 다시 로그인해주세요.';
+      el.className = 'drive-result not-found';
+      el.textContent = '토큰 만료 — 로그아웃 후 다시 로그인해주세요.';
       return null;
     }
     return res.json();
@@ -434,18 +430,18 @@ function searchDrive(jibunAddress) {
     var files = data.files || [];
 
     if (files.length === 0) {
-      driveResultEl.className = 'drive-result not-found';
-      driveResultEl.textContent = '저장된 등기부 없음 (' + searchTerm + ')';
+      el.className = 'drive-result not-found';
+      el.textContent = '저장된 ' + label + ' 없음 (' + searchTerm + ')';
       return;
     }
 
-    driveResultEl.className = 'drive-result found';
-    driveResultEl.textContent = '';
+    el.className = 'drive-result found';
+    el.textContent = '';
 
     var title = document.createElement('div');
     title.className = 'drive-found-title';
-    title.textContent = '📋 저장된 등기부 있음 (' + files.length + '건)';
-    driveResultEl.appendChild(title);
+    title.textContent = '📋 저장된 ' + label + ' 있음 (' + files.length + '건)';
+    el.appendChild(title);
 
     files.forEach(function(file) {
       var item = document.createElement('div');
@@ -468,12 +464,12 @@ function searchDrive(jibunAddress) {
       item.appendChild(nameEl);
       item.appendChild(link);
       item.appendChild(dlLink);
-      driveResultEl.appendChild(item);
+      el.appendChild(item);
     });
   })
   .catch(function(err) {
-    driveResultEl.className = 'drive-result not-found';
-    driveResultEl.textContent = 'Drive 검색 실패: ' + err.message;
+    el.className = 'drive-result not-found';
+    el.textContent = label + ' Drive 검색 실패: ' + err.message;
   });
 }
 
@@ -614,7 +610,8 @@ function searchAddress(keyword) {
           dropdown.classList.remove('show');
 
           // 주소 선택 즉시 Drive 검색
-          searchDrive(selectedJibun);
+          searchDriveFolder(DRIVE_FOLDER_ID, 'driveResult', '등기부', selectedJibun);
+          searchDriveFolder(DRIVE_BUILDING_FOLDER_ID, 'driveBuildingResult', '건축물대장', selectedJibun);
 
           // 자동 판별: bdKdcd=1 → 집합건물
           isComplex = (item.bdKdcd === '1');
