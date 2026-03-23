@@ -196,6 +196,25 @@
   .drive-file-name { font-size: 13px; color: #333; flex: 1; }
 
   /* 로그인 버튼 */
+  /* 등기부 열람 버튼 */
+  .result-actions {
+    display: flex; gap: 6px; margin-top: 8px;
+  }
+  .btn-iros {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    background: #2563eb; color: #fff; border: none; border-radius: 6px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn-iros:hover { background: #1d4ed8; }
+  .btn-copy {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; font-size: 12px; font-weight: 500;
+    background: #fff; color: #333; border: 1px solid #ddd; border-radius: 6px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn-copy:hover { background: #f5f5f5; }
+
   .google-login-btn {
     display: inline-flex; align-items: center; gap: 10px;
     padding: 10px 24px; border: 1px solid #ddd; border-radius: 8px;
@@ -730,10 +749,33 @@ function searchIros(page) {
         infoText += (infoText ? ' · ' : '') + item.status;
         metaEl.appendChild(document.createTextNode(infoText));
 
+        var actionsEl = document.createElement('div');
+        actionsEl.className = 'result-actions';
+
+        var irosBtn = document.createElement('button');
+        irosBtn.className = 'btn-iros';
+        irosBtn.textContent = '등기부 열람';
+        irosBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          openIrosViewer(item.pin);
+        });
+
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'btn-copy';
+        copyBtn.textContent = '고유번호 복사';
+        copyBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          copyPin(pinEl);
+        });
+
+        actionsEl.appendChild(irosBtn);
+        actionsEl.appendChild(copyBtn);
+
         div.appendChild(pinEl);
         div.appendChild(addrEl);
         div.appendChild(jibunEl);
         div.appendChild(metaEl);
+        div.appendChild(actionsEl);
 
         div.addEventListener('click', function() {
           copyPin(pinEl);
@@ -777,6 +819,21 @@ function searchIros(page) {
       btn.disabled = false;
       btn.textContent = '조회';
     });
+}
+
+// 인터넷등기소 열람 페이지 열기
+function openIrosViewer(pin) {
+  // 고유번호를 클립보드에 복사 후 등기소 열람 페이지로 이동
+  navigator.clipboard.writeText(pin).then(function() {
+    toastEl.textContent = '고유번호 복사됨 — 등기소 열람 페이지로 이동합니다';
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 2000);
+  });
+  // 인터넷등기소 열람/발급 페이지 (고유번호로 검색)
+  window.open('http://www.iros.go.kr/pos1/pfrontservlet?cmd=PKisMainAction&nextPage=/1/001001.jsp', '_blank');
 }
 
 function copyPin(pinEl) {
