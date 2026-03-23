@@ -499,6 +499,7 @@ window.addEventListener('load', async function() {
 });
 
 var IROS_API = 'https://kegos70.mycafe24.com/iros_proxy.php';
+var APICK_API = 'https://kegos70.mycafe24.com/apick_proxy.php';
 var JUSO_API = 'https://business.juso.go.kr/addrlink/addrLinkApi.do';
 var JUSO_KEY = 'U01TX0FVVEgyMDIzMDUyOTExMTAyMTExMzgwNzU=';
 
@@ -828,7 +829,7 @@ function openIrosViewer(pin) {
   clickedBtn.textContent = '열람 요청중...';
 
   // 1단계: 열람 요청 → ic_id 획득
-  fetch('/api/iros-view', {
+  fetch(APICK_API + '?action=view', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pin: pin }),
@@ -860,7 +861,11 @@ function openIrosViewer(pin) {
 function pollDownload(icId, btn, attempt) {
   if (attempt > 10) throw new Error('PDF 생성 타임아웃');
 
-  return fetch('/api/iros-download?ic_id=' + icId)
+  return fetch(APICK_API + '?action=download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ic_id: icId }),
+  })
     .then(function(res) {
       // 202 = 아직 처리 중 → 3초 후 재시도
       if (res.status === 202) {
