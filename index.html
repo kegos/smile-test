@@ -303,6 +303,11 @@ var driveToken = null;
 
 // ── OAuth redirect 로그인
 function startGoogleLogin() {
+  // 로그인 전 URL 파라미터 보존
+  var urlParams = new URLSearchParams(location.search);
+  var addrParam = urlParams.get('address');
+  if (addrParam) sessionStorage.setItem('pending_address', addrParam);
+
   var state = btoa(Math.random().toString(36));
   sessionStorage.setItem('oauth_state', state);
   var params = new URLSearchParams({
@@ -386,9 +391,10 @@ function showApp(user) {
   document.getElementById('userName').textContent = user.name || user.email;
   if (!user.picture) document.getElementById('userPic').style.display = 'none';
 
-  // URL ?address= 파라미터로 자동 검색
+  // URL ?address= 또는 로그인 전 저장된 주소로 자동 검색
   var urlParams = new URLSearchParams(location.search);
-  var addrParam = urlParams.get('address');
+  var addrParam = urlParams.get('address') || sessionStorage.getItem('pending_address');
+  sessionStorage.removeItem('pending_address');
   if (addrParam) {
     setTimeout(function() {
       input.value = addrParam;
