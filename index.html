@@ -377,6 +377,24 @@ function showApp(user) {
       input.value = addrParam;
       selectedAddress = addrParam;
       searchIros();
+
+      // 주소 API로 지번주소 조회 → Drive 검색
+      var jusoUrl = JUSO_API
+        + '?confmKey=' + encodeURIComponent(JUSO_KEY)
+        + '&currentPage=1&countPerPage=1&resultType=json'
+        + '&keyword=' + encodeURIComponent(addrParam);
+      fetch(jusoUrl)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var list = data.results && data.results.juso;
+          if (list && list.length > 0) {
+            var jibun = list[0].jibunAddr || '';
+            if (jibun) {
+              searchDriveFolder(DRIVE_FOLDER_ID, 'driveResult', '등기부', jibun);
+              searchDriveFolder(DRIVE_BUILDING_FOLDER_ID, 'driveBuildingResult', '건축물대장', jibun);
+            }
+          }
+        });
     }, 300);
   }
 }
@@ -420,7 +438,7 @@ function searchDriveFolder(folderId, elementId, label, jibunAddress) {
     + '?q=' + encodeURIComponent(query)
     + '&supportsAllDrives=true'
     + '&includeItemsFromAllDrives=true'
-    + '&fields=' + encodeURIComponent('files(id,name,webViewLink,webContentLink)')
+    + '&fields=' + encodeURIComponent('files(id,name,webViewLink,webContentLink,createdTime)')
     + '&pageSize=20';
 
   fetch(url, {
@@ -462,6 +480,13 @@ function searchDriveFolder(folderId, elementId, label, jibunAddress) {
       nameEl.className = 'drive-file-name';
       nameEl.textContent = file.name;
 
+      var dateEl = document.createElement('span');
+      dateEl.style.cssText = 'font-size:11px;color:#999;white-space:nowrap;';
+      if (file.createdTime) {
+        var d = new Date(file.createdTime);
+        dateEl.textContent = d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
+      }
+
       var link = document.createElement('a');
       link.href = file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view');
       link.target = '_blank';
@@ -473,6 +498,7 @@ function searchDriveFolder(folderId, elementId, label, jibunAddress) {
       dlLink.textContent = '다운로드';
 
       item.appendChild(nameEl);
+      item.appendChild(dateEl);
       item.appendChild(link);
       item.appendChild(dlLink);
       el.appendChild(item);
