@@ -48,7 +48,7 @@ if ($action === 'view') {
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => ['unique_num' => $pin],
+        CURLOPT_POSTFIELDS => ['unique_num' => $pin, 'option' => '현행'],
         CURLOPT_HTTPHEADER => ['CL_AUTH_KEY: ' . APICK_KEY],
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_TIMEOUT => 60,
