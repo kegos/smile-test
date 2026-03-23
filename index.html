@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>등기 고유번호 조회</title>
+<title>등기부등본 조회</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f5f5f5; color: #333; }
@@ -230,7 +230,7 @@
 <!-- 로그인 오버레이 -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
-    <h2>등기 고유번호 조회</h2>
+    <h2>등기부등본 조회</h2>
     <p>smilersa.com 계정으로 로그인하세요</p>
     <button class="google-login-btn" onclick="startGoogleLogin()">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G">
@@ -246,7 +246,7 @@
     <span id="userName"></span>
     <button onclick="logout()">로그아웃</button>
   </div>
-  <h1>등기 고유번호 조회</h1>
+  <h1>등기부등본 조회</h1>
 
   <div class="search-box">
     <input type="text" id="addressInput" placeholder="도로명주소 검색 (예: 서전로 9, 해운대로 등)"
@@ -368,6 +368,17 @@ function showApp(user) {
   document.getElementById('userPic').src = user.picture || '';
   document.getElementById('userName').textContent = user.name || user.email;
   if (!user.picture) document.getElementById('userPic').style.display = 'none';
+
+  // URL ?address= 파라미터로 자동 검색
+  var urlParams = new URLSearchParams(location.search);
+  var addrParam = urlParams.get('address');
+  if (addrParam) {
+    setTimeout(function() {
+      input.value = addrParam;
+      selectedAddress = addrParam;
+      searchIros();
+    }, 300);
+  }
 }
 
 function logout() {
