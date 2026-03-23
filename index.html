@@ -823,20 +823,17 @@ function searchIros(page) {
 }
 
 // APICK API로 등기부 열람 → PDF 다운로드
-// 지번주소 + 타입으로 파일명 생성: "해운대구 우동 1234 건물.pdf"
+// 파일명: "지번주소 건물(또는 토지) 사용자이름.pdf"
 function makeRegistryFilename(jibunAddr, itemType) {
   if (!jibunAddr) return '등기부.pdf';
-  var parts = jibunAddr.replace(/^\s+/, '').split(/\s+/);
-  var gu = '', dong = '', beonji = '';
-  for (var i = 0; i < parts.length; i++) {
-    if (parts[i].endsWith('구')) gu = parts[i];
-    if (parts[i].endsWith('동') || parts[i].endsWith('리')) dong = parts[i];
-    if (/^\d/.test(parts[i])) { beonji = parts[i]; break; }
-  }
-  var name = [gu, dong, beonji].filter(Boolean).join(' ');
-  if (!name) name = jibunAddr;
+  var addr = jibunAddr.trim();
   var suffix = itemType || '건물';
-  return name + ' ' + suffix + '.pdf';
+  var saved = sessionStorage.getItem('user');
+  var userName = '';
+  if (saved) { try { userName = JSON.parse(saved).name || ''; } catch(e) {} }
+  var parts = [addr, suffix];
+  if (userName) parts.push(userName);
+  return parts.join(' ') + '.pdf';
 }
 
 function openIrosViewer(pin, jibunAddr, itemType) {
