@@ -956,7 +956,7 @@ function uploadToDrive(blob, filename) {
     combined.set(pdfBytes, metaBytes.length);
     combined.set(endBytes, metaBytes.length + pdfBytes.length);
 
-    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + driveToken,
@@ -966,7 +966,12 @@ function uploadToDrive(blob, filename) {
     });
   })
   .then(function(res) {
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      return res.json().then(function(err) {
+        var msg = (err.error && err.error.message) || 'HTTP ' + res.status;
+        throw new Error(msg);
+      });
+    }
     return res.json();
   })
   .then(function(file) {
