@@ -758,7 +758,7 @@ function searchIros(page) {
         irosBtn.textContent = '등기부 열람';
         irosBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          openIrosViewer(item.pin, item.jibunAddress, item.type);
+          openIrosViewer(item.pin, item.jibunAddress, item.type, item.dong, item.roomNo);
         });
 
         var copyBtn = document.createElement('button');
@@ -823,10 +823,12 @@ function searchIros(page) {
 }
 
 // APICK API로 등기부 열람 → PDF 다운로드
-// 파일명: "지번주소 건물(또는 토지) 사용자이름.pdf"
-function makeRegistryFilename(jibunAddr, itemType) {
+// 파일명: "지번주소 101동 301호 집합건물 홍길동.pdf"
+function makeRegistryFilename(jibunAddr, itemType, dong, roomNo) {
   if (!jibunAddr) return '등기부.pdf';
   var addr = jibunAddr.trim();
+  if (dong) addr += ' ' + dong + '동';
+  if (roomNo) addr += ' ' + roomNo + '호';
   var suffix = itemType || '건물';
   var saved = sessionStorage.getItem('user');
   var userName = '';
@@ -836,13 +838,13 @@ function makeRegistryFilename(jibunAddr, itemType) {
   return parts.join(' ') + '.pdf';
 }
 
-function openIrosViewer(pin, jibunAddr, itemType) {
+function openIrosViewer(pin, jibunAddr, itemType, dong, roomNo) {
   var clickedBtn = event.target;
   var actionsEl = clickedBtn.parentElement;
   clickedBtn.disabled = true;
   clickedBtn.textContent = '열람 요청중...';
 
-  var filename = makeRegistryFilename(jibunAddr, itemType);
+  var filename = makeRegistryFilename(jibunAddr, itemType, dong, roomNo);
 
   fetch(APICK_API + '?action=view', {
     method: 'POST',
