@@ -758,7 +758,7 @@ function searchIros(page) {
         irosBtn.textContent = '등기부 열람';
         irosBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          openIrosViewer(item.pin);
+          openIrosViewer(item.pin, item.jibunAddress, item.type);
         });
 
         var copyBtn = document.createElement('button');
@@ -823,11 +823,29 @@ function searchIros(page) {
 }
 
 // APICK API로 등기부 열람 → PDF 다운로드
-function openIrosViewer(pin) {
+// 지번주소 + 타입으로 파일명 생성: "해운대구 우동 1234 건물.pdf"
+function makeRegistryFilename(jibunAddr, itemType) {
+  if (!jibunAddr) return '등기부.pdf';
+  var parts = jibunAddr.replace(/^\s+/, '').split(/\s+/);
+  var gu = '', dong = '', beonji = '';
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].endsWith('구')) gu = parts[i];
+    if (parts[i].endsWith('동') || parts[i].endsWith('리')) dong = parts[i];
+    if (/^\d/.test(parts[i])) { beonji = parts[i]; break; }
+  }
+  var name = [gu, dong, beonji].filter(Boolean).join(' ');
+  if (!name) name = jibunAddr;
+  var suffix = itemType || '건물';
+  return name + ' ' + suffix + '.pdf';
+}
+
+function openIrosViewer(pin, jibunAddr, itemType) {
   var clickedBtn = event.target;
   var actionsEl = clickedBtn.parentElement;
   clickedBtn.disabled = true;
   clickedBtn.textContent = '열람 요청중...';
+
+  var filename = makeRegistryFilename(jibunAddr, itemType);
 
   fetch(APICK_API + '?action=view', {
     method: 'POST',
@@ -842,7 +860,7 @@ function openIrosViewer(pin) {
     clickedBtn.textContent = 'PDF 준비중...';
 
     // PDF 다운로드 폴링
-    return pollAndDownload(icId, clickedBtn, actionsEl, 0);
+    return pollAndDownload(icId, clickedBtn, actionsEl, filename, 0);
   })
   .catch(function(err) {
     toastEl.textContent = '오류: ' + err.message;
@@ -856,7 +874,7 @@ function openIrosViewer(pin) {
   });
 }
 
-function pollAndDownload(icId, btn, actionsEl, attempt) {
+function pollAndDownload(icId, btn, actionsEl, filename, attempt) {
   if (attempt > 15) {
     btn.disabled = false;
     btn.textContent = '등기부 열람';
@@ -872,7 +890,7 @@ function pollAndDownload(icId, btn, actionsEl, attempt) {
     if (res.status === 202) {
       btn.textContent = 'PDF 준비중... (' + ((attempt + 1) * 3) + '초)';
       return new Promise(function(resolve) {
-        setTimeout(function() { resolve(pollAndDownload(icId, btn, actionsEl, attempt + 1)); }, 3000);
+        setTimeout(function() { resolve(pollAndDownload(icId, btn, actionsEl, filename, attempt + 1)); }, 3000);
       });
     }
     if (!res.ok) {
@@ -886,30 +904,87 @@ function pollAndDownload(icId, btn, actionsEl, attempt) {
       // 새 탭에서 PDF 열기
       window.open(url, '_blank');
 
+      // Google Drive에 자동 저장
+      uploadToDrive(blob, filename);
+
       // 버튼 복원 + 다운로드 버튼 추가
       btn.disabled = false;
       btn.textContent = '등기부 열람';
 
-      // 기존 PDF 버튼 제거 후 새로 추가
       var oldPdfBtn = actionsEl.querySelector('.btn-pdf');
       if (oldPdfBtn) oldPdfBtn.remove();
 
       var pdfBtn = document.createElement('a');
       pdfBtn.className = 'btn-iros btn-pdf';
       pdfBtn.href = url;
-      pdfBtn.download = 'registry_' + icId + '.pdf';
+      pdfBtn.download = filename;
       pdfBtn.textContent = 'PDF 저장';
       pdfBtn.style.background = '#16a34a';
       pdfBtn.style.textDecoration = 'none';
       actionsEl.appendChild(pdfBtn);
 
-      toastEl.textContent = '등기부 열람 완료';
+      toastEl.textContent = '등기부 열람 완료 — Drive 저장중...';
       toastEl.classList.add('show');
       setTimeout(function() {
         toastEl.textContent = '고유번호 복사됨';
         toastEl.classList.remove('show');
-      }, 2000);
+      }, 3000);
     });
+  });
+}
+
+// Google Drive에 PDF 업로드
+function uploadToDrive(blob, filename) {
+  if (!driveToken) { console.warn('Drive 토큰 없음'); return; }
+
+  var meta = JSON.stringify({
+    name: filename,
+    mimeType: 'application/pdf',
+    parents: [DRIVE_FOLDER_ID],
+  });
+
+  var boundary = 'bnd_' + Math.random().toString(36).slice(2);
+  var metaBytes = new TextEncoder().encode(
+    '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + boundary + '\r\nContent-Type: application/pdf\r\n\r\n'
+  );
+  var endBytes = new TextEncoder().encode('\r\n--' + boundary + '--');
+
+  blob.arrayBuffer().then(function(ab) {
+    var pdfBytes = new Uint8Array(ab);
+    var combined = new Uint8Array(metaBytes.length + pdfBytes.length + endBytes.length);
+    combined.set(metaBytes, 0);
+    combined.set(pdfBytes, metaBytes.length);
+    combined.set(endBytes, metaBytes.length + pdfBytes.length);
+
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + driveToken,
+        'Content-Type': 'multipart/related; boundary=' + boundary,
+      },
+      body: combined,
+    });
+  })
+  .then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  })
+  .then(function(file) {
+    toastEl.textContent = 'Drive 저장 완료: ' + filename;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+  })
+  .catch(function(err) {
+    console.error('Drive 업로드 실패:', err);
+    toastEl.textContent = 'Drive 저장 실패: ' + err.message;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
   });
 }
 
