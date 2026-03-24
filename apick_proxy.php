@@ -151,6 +151,117 @@ if ($action === 'download') {
     exit;
 }
 
+// ── 건축물대장 목록 조회
+if ($action === 'building_list') {
+    $address = isset($input['address']) ? $input['address'] : '';
+    if (!$address) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(400);
+        echo json_encode(['error' => 'address required']);
+        exit;
+    }
+
+    $ch = curl_init('https://apick.app/rest/get_building_register_list');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => ['address' => $address],
+        CURLOPT_HTTPHEADER => ['CL_AUTH_KEY: ' . APICK_KEY],
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 60,
+    ]);
+    $response = curl_exec($ch);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    if ($curlErr) {
+        http_response_code(500);
+        echo json_encode(['error' => 'APICK connection failed: ' . $curlErr]);
+        exit;
+    }
+
+    $data = json_decode($response, true);
+    if (!$data) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Invalid response', 'raw' => substr($response, 0, 500)]);
+        exit;
+    }
+
+    echo json_encode($data);
+    exit;
+}
+
+// ── 건축물대장 열람 (PDF)
+if ($action === 'building_view') {
+    $address = isset($input['address']) ? $input['address'] : '';
+    $bName   = isset($input['b_name'])  ? $input['b_name']  : '';
+    $dong    = isset($input['dong'])    ? $input['dong']    : '';
+    $ho      = isset($input['ho'])      ? $input['ho']      : '';
+
+    if (!$address) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(400);
+        echo json_encode(['error' => 'address required']);
+        exit;
+    }
+
+    $postFields = ['address' => $address];
+    if ($bName) $postFields['b_name'] = $bName;
+    if ($dong)  $postFields['dong']   = $dong;
+    if ($ho)    $postFields['ho']     = $ho;
+
+    $ch = curl_init('https://apick.app/rest/building_register');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postFields,
+        CURLOPT_HTTPHEADER => ['CL_AUTH_KEY: ' . APICK_KEY],
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 120,
+        CURLOPT_HEADER => true,
+    ]);
+    $response = curl_exec($ch);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+        echo json_encode(['error' => 'APICK connection failed: ' . $curlErr]);
+        exit;
+    }
+
+    $body = substr($response, $headerSize);
+    if (!$contentType) $contentType = '';
+
+    // JSON 응답 = 에러 또는 처리중
+    if (strpos($contentType, 'json') !== false || strpos($contentType, 'text/') !== false) {
+        $data = json_decode($body, true);
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($data && isset($data['data']['result']) && $data['data']['result'] == 2) {
+            http_response_code(202);
+            echo json_encode(['status' => 'processing', 'message' => 'Building register generating...']);
+            exit;
+        }
+
+        http_response_code(400);
+        echo json_encode(['error' => 'building register failed', 'detail' => $data]);
+        exit;
+    }
+
+    // PDF 바이너리 응답
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="building_register.pdf"');
+    header('Content-Length: ' . strlen($body));
+    echo $body;
+    exit;
+}
+
 // Unknown action
 header('Content-Type: application/json; charset=utf-8');
 http_response_code(400);
@@ -159,5 +270,7 @@ echo json_encode([
     'usage' => [
         'POST apick_proxy.php?action=view   body: {"pin":"14digit"}',
         'POST apick_proxy.php?action=download body: {"ic_id":123}',
+        'POST apick_proxy.php?action=building_list body: {"address":"도로명주소"}',
+        'POST apick_proxy.php?action=building_view body: {"address":"도로명주소","b_name":"건물명","dong":"동","ho":"호"}',
     ],
 ]);

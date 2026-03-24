@@ -231,6 +231,44 @@
     cursor: pointer; white-space: nowrap;
   }
   .btn-copy:hover { background: #f5f5f5; }
+  .btn-building {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    background: #16a34a; color: #fff; border: none; border-radius: 6px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn-building:hover { background: #15803d; }
+
+  /* 건축물대장 선택 모달 */
+  .building-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .building-modal {
+    background: #fff; border-radius: 14px; max-width: 520px; width: 90%;
+    max-height: 80vh; overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+  }
+  .building-modal-header {
+    padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .building-modal-header h3 { font-size: 16px; font-weight: 700; color: #1a1a1a; }
+  .building-modal-close {
+    background: none; border: none; font-size: 20px; cursor: pointer;
+    color: #999; padding: 4px 8px;
+  }
+  .building-modal-close:hover { color: #333; }
+  .building-modal-body { padding: 12px 20px; overflow-y: auto; max-height: 60vh; }
+  .building-modal-item {
+    padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px;
+    margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  .building-modal-item:hover { background: #f0fdf4; border-color: #16a34a; }
+  .building-modal-item .bm-name { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+  .building-modal-item .bm-detail { font-size: 12px; color: #666; margin-top: 2px; }
+  .building-modal-item .bm-area { font-size: 12px; color: #16a34a; font-weight: 500; }
 
   .google-login-btn {
     display: inline-flex; align-items: center; gap: 10px;
@@ -450,8 +488,7 @@ function searchDriveFolder(folderId, elementId, label, jibunAddress) {
     return;
   }
 
-  var mainBeonji = beonji.split('-')[0];
-  var searchTerm = dong + ' ' + mainBeonji;
+  var searchTerm = dong + ' ' + beonji;
   var query = "'" + folderId + "' in parents"
     + " and mimeType='application/pdf'"
     + " and name contains '" + searchTerm + "'"
@@ -834,6 +871,17 @@ function searchIros(page) {
           openIrosViewer(item.pin, item.jibunAddress, item.type, item.dong, item.roomNo);
         });
 
+        var buildingBtn = null;
+        if (item.type !== '토지') {
+          buildingBtn = document.createElement('button');
+          buildingBtn.className = 'btn-building';
+          buildingBtn.textContent = '건축물대장';
+          buildingBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openBuildingRegister(item.roadAddress, item.jibunAddress, item.type, item.dong, item.roomNo, buildingBtn);
+          });
+        }
+
         var copyBtn = document.createElement('button');
         copyBtn.className = 'btn-copy';
         copyBtn.textContent = '고유번호 복사';
@@ -843,6 +891,7 @@ function searchIros(page) {
         });
 
         actionsEl.appendChild(irosBtn);
+        if (buildingBtn) actionsEl.appendChild(buildingBtn);
         actionsEl.appendChild(copyBtn);
 
         div.appendChild(pinEl);
@@ -1135,6 +1184,297 @@ function uploadToDrive(blob, filename) {
     return res.json();
   })
   .then(function(file) {
+    toastEl.textContent = 'Drive 저장 완료: ' + filename;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+  })
+  .catch(function(err) {
+    console.error('Drive 업로드 실패:', err);
+    toastEl.textContent = 'Drive 저장 실패: ' + err.message;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+  });
+}
+
+// ── 건축물대장 열람
+function makeBuildingFilename(jibunAddr, itemType, dong, roomNo) {
+  if (!jibunAddr) return '건축물대장.pdf';
+  var addr = jibunAddr.trim();
+  if (dong) addr += ' ' + dong + '동';
+  if (roomNo) addr += ' ' + roomNo + '호';
+  var saved = sessionStorage.getItem('user');
+  var userName = '';
+  if (saved) { try { userName = JSON.parse(saved).name || ''; } catch(e) {} }
+  var parts = [addr, '건축물대장'];
+  if (userName) parts.push(userName);
+  return parts.join(' ') + '.pdf';
+}
+
+function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo, clickedBtn) {
+  clickedBtn.disabled = true;
+  clickedBtn.textContent = '조회중...';
+
+  var actionsEl = clickedBtn.parentElement;
+
+  // 진행 표시 UI
+  var oldProgress = actionsEl.parentElement.querySelector('.iros-progress');
+  if (oldProgress) oldProgress.remove();
+
+  var progressEl = document.createElement('div');
+  progressEl.className = 'iros-progress';
+  var barOuter = document.createElement('div');
+  barOuter.className = 'iros-progress-bar';
+  var barFill = document.createElement('div');
+  barFill.className = 'iros-progress-fill';
+  barFill.style.width = '10%';
+  barOuter.appendChild(barFill);
+  var progressText = document.createElement('span');
+  progressText.className = 'iros-progress-text active';
+  progressText.textContent = '① 건축물대장 목록 조회중...';
+  progressEl.appendChild(barOuter);
+  progressEl.appendChild(progressText);
+  actionsEl.parentElement.appendChild(progressEl);
+
+  // 1단계: 목록 조회
+  fetch(APICK_API + '?action=building_list', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address: roadAddress }),
+  })
+  .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+  .then(function(result) {
+    if (!result.ok) throw new Error(result.data.error || '목록 조회 실패');
+
+    var respData = result.data.data || result.data;
+    var list = respData.data || respData;
+    if (!list || !Array.isArray(list) || list.length === 0) {
+      throw new Error('건축물대장 정보가 없습니다.');
+    }
+
+    barFill.style.width = '40%';
+
+    // 단일 항목이면 바로 열람
+    if (list.length === 1) {
+      progressText.textContent = '② PDF 발급중...';
+      return fetchBuildingPdf(roadAddress, list[0], jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+    }
+
+    // 복수 항목이면 모달로 선택
+    barFill.style.width = '40%';
+    progressText.textContent = '② ' + list.length + '건 — 항목을 선택하세요';
+    progressText.classList.remove('active');
+
+    showBuildingModal(list, function(selected) {
+      barFill.style.width = '50%';
+      progressText.textContent = '② PDF 발급중...';
+      progressText.classList.add('active');
+      return fetchBuildingPdf(roadAddress, selected, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+    }, function() {
+      // 취소
+      clickedBtn.disabled = false;
+      clickedBtn.textContent = '건축물대장';
+      if (progressEl.parentElement) progressEl.remove();
+    });
+  })
+  .catch(function(err) {
+    if (progressEl.parentElement) progressEl.remove();
+    toastEl.textContent = '오류: ' + err.message;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+    clickedBtn.disabled = false;
+    clickedBtn.textContent = '건축물대장';
+  });
+}
+
+function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl) {
+  clickedBtn.textContent = 'PDF 발급중...';
+
+  var body = { address: roadAddress };
+  if (entry.b_name) body.b_name = entry.b_name;
+  if (entry.dong)   body.dong = entry.dong;
+  if (entry.ho)     body.ho = entry.ho;
+
+  return fetch(APICK_API + '?action=building_view', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  .then(function(res) {
+    var ct = res.headers.get('content-type') || '';
+    if (ct.indexOf('pdf') !== -1) {
+      return res.blob().then(function(blob) { return { type: 'pdf', blob: blob }; });
+    }
+    return res.json().then(function(d) { return { type: 'json', data: d, ok: res.ok, status: res.status }; });
+  })
+  .then(function(result) {
+    if (result.type === 'json') {
+      if (result.status === 202) {
+        // 아직 처리중 — 3초 후 재시도
+        barFill.style.width = '60%';
+        progressText.textContent = '② PDF 생성 대기중...';
+        return new Promise(function(resolve) {
+          setTimeout(function() {
+            resolve(fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl));
+          }, 3000);
+        });
+      }
+      throw new Error((result.data && result.data.error) || '건축물대장 발급 실패');
+    }
+
+    // PDF 수신 성공
+    var blob = result.blob;
+    barFill.style.width = '100%';
+    progressText.textContent = '③ 완료!';
+    progressText.classList.remove('active');
+    setTimeout(function() {
+      if (progressEl.parentElement) progressEl.remove();
+    }, 2000);
+
+    var url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+
+    var filename = makeBuildingFilename(jibunAddress, itemType, dong, roomNo);
+
+    // Google Drive 건축물대장 폴더에 저장
+    uploadToDriveFolder(blob, filename, DRIVE_BUILDING_FOLDER_ID);
+
+    clickedBtn.disabled = false;
+    clickedBtn.textContent = '건축물대장';
+
+    toastEl.textContent = '건축물대장 열람 완료 — Drive 저장중...';
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+  })
+  .catch(function(err) {
+    if (progressEl.parentElement) progressEl.remove();
+    toastEl.textContent = '오류: ' + err.message;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.textContent = '고유번호 복사됨';
+      toastEl.classList.remove('show');
+    }, 3000);
+    clickedBtn.disabled = false;
+    clickedBtn.textContent = '건축물대장';
+  });
+}
+
+function showBuildingModal(list, onSelect, onCancel) {
+  var overlay = document.createElement('div');
+  overlay.className = 'building-modal-overlay';
+
+  var modal = document.createElement('div');
+  modal.className = 'building-modal';
+
+  var header = document.createElement('div');
+  header.className = 'building-modal-header';
+  var title = document.createElement('h3');
+  title.textContent = '건축물대장 선택 (' + list.length + '건)';
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'building-modal-close';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', function() {
+    document.body.removeChild(overlay);
+    onCancel();
+  });
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  var body = document.createElement('div');
+  body.className = 'building-modal-body';
+
+  list.forEach(function(entry) {
+    var item = document.createElement('div');
+    item.className = 'building-modal-item';
+
+    var nameEl = document.createElement('div');
+    nameEl.className = 'bm-name';
+    var nameText = entry.b_name || '(건물명 없음)';
+    if (entry.dong && entry.dong !== '동명칭 없음') nameText += ' ' + entry.dong;
+    if (entry.ho && entry.ho !== '호명칭 없음') nameText += ' ' + entry.ho;
+    nameEl.textContent = nameText;
+
+    var areaEl = document.createElement('div');
+    areaEl.className = 'bm-area';
+    if (entry.area) areaEl.textContent = '연면적 ' + entry.area;
+
+    item.appendChild(nameEl);
+    if (entry.area) item.appendChild(areaEl);
+
+    item.addEventListener('click', function() {
+      document.body.removeChild(overlay);
+      onSelect(entry);
+    });
+
+    body.appendChild(item);
+  });
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  overlay.appendChild(modal);
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) {
+      document.body.removeChild(overlay);
+      onCancel();
+    }
+  });
+
+  document.body.appendChild(overlay);
+}
+
+// Google Drive 특정 폴더에 업로드 (건축물대장용)
+function uploadToDriveFolder(blob, filename, folderId) {
+  if (!driveToken) { console.warn('Drive 토큰 없음'); return; }
+
+  var meta = JSON.stringify({
+    name: filename,
+    mimeType: 'application/pdf',
+    parents: [folderId],
+  });
+
+  var boundary = 'bnd_' + Math.random().toString(36).slice(2);
+  var metaBytes = new TextEncoder().encode(
+    '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + boundary + '\r\nContent-Type: application/pdf\r\n\r\n'
+  );
+  var endBytes = new TextEncoder().encode('\r\n--' + boundary + '--');
+
+  blob.arrayBuffer().then(function(ab) {
+    var pdfBytes = new Uint8Array(ab);
+    var combined = new Uint8Array(metaBytes.length + pdfBytes.length + endBytes.length);
+    combined.set(metaBytes, 0);
+    combined.set(pdfBytes, metaBytes.length);
+    combined.set(endBytes, metaBytes.length + pdfBytes.length);
+
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + driveToken,
+        'Content-Type': 'multipart/related; boundary=' + boundary,
+      },
+      body: combined,
+    });
+  })
+  .then(function(res) {
+    if (!res.ok) {
+      return res.json().then(function(err) {
+        throw new Error((err.error && err.error.message) || 'HTTP ' + res.status);
+      });
+    }
+    return res.json();
+  })
+  .then(function() {
     toastEl.textContent = 'Drive 저장 완료: ' + filename;
     toastEl.classList.add('show');
     setTimeout(function() {
