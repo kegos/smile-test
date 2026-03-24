@@ -738,16 +738,32 @@ function searchIros(page) {
   statusEl.className = 'status loading';
   statusEl.textContent = '인터넷등기소에서 검색 중...';
 
-  var url = IROS_API + '?address=' + encodeURIComponent(address) + '&type=' + type;
-  if (type === 'complex') {
-    var dong = dongSelect.value.trim();
-    var ho = hoInput.value.trim();
-    if (dong) url += '&dong=' + encodeURIComponent(dong);
-    if (ho) url += '&ho=' + encodeURIComponent(ho);
-    if (!dong && !ho) url += '&page=' + page;
-  }
+  resolveJibunForIros(address)
+    .then(function(resolved) {
+      var queryJibun = resolved.jibunAddress;
+      var queryType = type;
 
-  fetch(url)
+      // 직접 입력 시 지번 주소로 정규화
+      if (resolved.changed && queryJibun) {
+        input.value = queryJibun;
+      }
+
+      // 주소 API 결과로 집합건물 여부를 보정
+      if (resolved.isComplex === true) {
+        queryType = 'complex';
+      }
+
+      var url = IROS_API + '?jibun=' + encodeURIComponent(queryJibun || address) + '&type=' + queryType;
+      if (queryType === 'complex') {
+        var dong = dongSelect.value.trim();
+        var ho = hoInput.value.trim();
+        if (dong) url += '&dong=' + encodeURIComponent(dong);
+        if (ho) url += '&ho=' + encodeURIComponent(ho);
+        if (!dong && !ho) url += '&page=' + page;
+      }
+
+      return fetch(url);
+    })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
@@ -756,7 +772,7 @@ function searchIros(page) {
 
       if (data.count === 0) {
         statusEl.className = 'status error';
-        statusEl.textContent = '검색 결과가 없습니다. 도로명주소를 확인해주세요.';
+        statusEl.textContent = '검색 결과가 없습니다. 지번주소를 확인해주세요.';
         return;
       }
 
@@ -876,6 +892,56 @@ function searchIros(page) {
     .then(function() {
       btn.disabled = false;
       btn.textContent = '조회';
+    });
+}
+
+function resolveJibunForIros(address) {
+  if (!address) {
+    return Promise.resolve({ jibunAddress: '', changed: false, isComplex: false });
+  }
+
+  // 드롭다운에서 선택한 주소는 매칭되는 지번이 이미 있음
+  if (selectedJibun && (selectedAddress === address || selectedJibun === address)) {
+    return Promise.resolve({ jibunAddress: selectedJibun, changed: selectedJibun !== address, isComplex: isComplex });
+  }
+
+  var url = JUSO_API
+    + '?confmKey=' + encodeURIComponent(JUSO_KEY)
+    + '&currentPage=1&countPerPage=5&resultType=json'
+    + '&keyword=' + encodeURIComponent(address);
+
+  return fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var list = data.results && data.results.juso;
+      if (!list || list.length === 0) {
+        return { jibunAddress: address, changed: false, isComplex: isComplex };
+      }
+
+      var picked = list.find(function(item) {
+        return (item.roadAddrPart1 || item.roadAddr) === address || item.jibunAddr === address;
+      }) || list[0];
+
+      var jibunAddress = (picked.jibunAddr || '').trim();
+      var roadAddress = (picked.roadAddrPart1 || picked.roadAddr || '').trim();
+
+      if (roadAddress) selectedAddress = roadAddress;
+      if (jibunAddress) {
+        selectedJibun = jibunAddress;
+        searchDriveFolder(DRIVE_FOLDER_ID, 'driveResult', '등기부', selectedJibun);
+        searchDriveFolder(DRIVE_BUILDING_FOLDER_ID, 'driveBuildingResult', '건축물대장', selectedJibun);
+      }
+
+      isComplex = (picked.bdKdcd === '1');
+
+      return {
+        jibunAddress: jibunAddress || address,
+        changed: !!jibunAddress && jibunAddress !== address,
+        isComplex: isComplex,
+      };
+    })
+    .catch(function() {
+      return { jibunAddress: address, changed: false, isComplex: isComplex };
     });
 }
 

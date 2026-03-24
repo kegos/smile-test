@@ -228,7 +228,7 @@ function searchByRoadAddress($cookieStr, $sido, $sigungu, $roadName, $buildingNo
 }
 
 // 주소 파싱
-function parseRoadAddress($address) {
+function parseAddressWithSido($address) {
     $sidoList = [
         '서울특별시', '부산광역시', '대구광역시', '인천광역시',
         '광주광역시', '대전광역시', '울산광역시', '세종특별자치시',
@@ -237,28 +237,75 @@ function parseRoadAddress($address) {
     ];
 
     $sido = '';
-    $rest = $address;
+    $rest = trim($address);
     foreach ($sidoList as $s) {
-        if (mb_strpos($address, $s) === 0) {
+        if (mb_strpos($rest, $s) === 0) {
             $sido = $s;
-            $rest = trim(mb_substr($address, mb_strlen($s)));
+            $rest = trim(mb_substr($rest, mb_strlen($s)));
             break;
         }
     }
 
-    $parts = explode(' ', $rest);
-    $sigungu = $parts[0] ?? '';
-    $roadName = $parts[1] ?? '';
-    $buildingNoParts = explode('-', $parts[2] ?? '');
-    $buildingNo = $buildingNoParts[0] ?? '';
-    $buildingNo2 = $buildingNoParts[1] ?? '';
+    return [$sido, $rest];
+}
 
-    return [$sido, $sigungu, $roadName, $buildingNo, $buildingNo2];
+function formatPin($pin) {
+    $raw = preg_replace('/[^0-9]/', '', (string)$pin);
+    if (strlen($raw) !== 14) {
+        return (string)$pin;
+    }
+    return substr($raw, 0, 4) . '-' . substr($raw, 4, 4) . '-' . substr($raw, 8);
+}
+
+function normalizeSimpleResultItem($item) {
+    $pin = $item['pin'] ?? ($item['real_pin'] ?? '');
+    $type = trim($item['real_cls_name'] ?? ($item['real_cls_cd'] ?? ''));
+
+    if (!$type) {
+        $hasRoom = trim($item['buld_no_room'] ?? '') !== '';
+        $hasDong = trim($item['buld_no_buld'] ?? '') !== '';
+        if ($hasRoom || $hasDong) {
+            $type = '집합건물';
+        }
+    }
+
+    return [
+        'pin' => $pin,
+        'pinFormatted' => formatPin($pin),
+        'roadAddress' => $item['rd_addr'] ?? '',
+        'jibunAddress' => $item['real_indi_cont'] ?? '',
+        'detail' => trim($item['add_item'] ?? ''),
+        'type' => $type,
+        'buildingName' => trim($item['buld_name'] ?? ''),
+        'dong' => trim($item['buld_no_buld'] ?? ''),
+        'roomNo' => trim($item['buld_no_room'] ?? ''),
+        'owner' => $item['nomprs_name'] ?? '',
+        'status' => $item['rgsbk_use_cls_name'] ?? ($item['use_cls_cd'] ?? '현행'),
+    ];
+}
+
+function isComplexItem($item) {
+    $type = trim($item['real_cls_name'] ?? ($item['real_cls_cd'] ?? ''));
+    if (mb_strpos($type, '집합') !== false) {
+        return true;
+    }
+
+    $hasRoom = trim($item['buld_no_room'] ?? '') !== '';
+    $hasDong = trim($item['buld_no_buld'] ?? '') !== '';
+    return $hasRoom || $hasDong;
+}
+
+function buildSimpleSearchKeyword($baseAddress, $dong = '', $ho = '') {
+    $swrd = trim($baseAddress);
+    if ($dong !== '') $swrd .= ' ' . $dong . '동';
+    if ($ho !== '') $swrd .= ' ' . $ho . '호';
+    return trim($swrd);
 }
 
 // === 메인 ===
 try {
     $address = $_GET['address'] ?? '';
+    $jibun = trim($_GET['jibun'] ?? '');
     $sido = $_GET['sido'] ?? '';
     $sigungu = $_GET['sigungu'] ?? '';
     $road = $_GET['road'] ?? '';
@@ -268,27 +315,46 @@ try {
     $dong = trim($_GET['dong'] ?? '');  // 동 (집합건물)
     $ho = trim($_GET['ho'] ?? '');      // 호 (집합건물)
 
-    // type → kind_cls 매핑
+    // type → 간편검색 kind_cls 매핑
     $kindClsMap = [
-        'all'      => '4',   // 토지+건물
-        'complex'  => '1',   // 집합건물
-        'land'     => '2',   // 토지
-        'building' => '3',   // 건물
+        'all'      => 'all',
+        'complex'  => 'coll',
+        'land'     => 'land',
+        'building' => 'buld',
     ];
-    $kindCls = $kindClsMap[$type] ?? '4';
+    $kindCls = $kindClsMap[$type] ?? 'all';
 
-    if ($address) {
-        list($sido, $sigungu, $road, $no, $no2) = parseRoadAddress($address);
+    $baseAddress = $jibun;
+
+    // 하위호환: jibun 미지정 시 기존 address를 지번 검색 키워드로 사용
+    if ($baseAddress === '' && $address) {
+        $baseAddress = trim($address);
     }
 
-    if (!$sido || !$sigungu || !$road || !$no) {
+    if ($baseAddress === '' && $sido && $sigungu) {
+        if ($road && $no) {
+            $baseAddress = trim($sigungu . ' ' . $road . ' ' . $no . ($no2 ? '-' . $no2 : ''));
+        } else {
+            $baseAddress = trim($sigungu . ' ' . ($_GET['dong'] ?? '') . ' ' . ($_GET['beonji'] ?? ''));
+        }
+    }
+
+    if ($baseAddress !== '' && !$sido) {
+        list($parsedSido, $restAddress) = parseAddressWithSido($baseAddress);
+        if ($parsedSido) {
+            $sido = $parsedSido;
+            $baseAddress = $restAddress;
+        }
+    }
+
+    if (!$sido || !$baseAddress) {
         http_response_code(400);
         echo json_encode([
             'error' => '주소 파라미터 필요',
             'usage' => [
-                'iros_proxy.php?address=부산광역시 부산진구 서전로 9',
-                'iros_proxy.php?address=부산광역시 해운대구 해운대로 570&type=complex',
-                'iros_proxy.php?sido=부산광역시&sigungu=부산진구&road=서전로&no=9&type=all',
+                'iros_proxy.php?jibun=부산광역시 동구 초량동 1200-2',
+                'iros_proxy.php?jibun=부산광역시 동구 초량동 1200-2&type=land',
+                'iros_proxy.php?jibun=부산광역시 해운대구 우동 1436&type=complex&dong=101&ho=1201',
             ],
             'type_values' => [
                 'all'      => '토지+건물 (기본값)',
@@ -301,114 +367,29 @@ try {
     }
 
     $cookieStr = getSessionCookies();
-    $page = intval($_GET['page'] ?? 1);
+    $page = max(1, intval($_GET['page'] ?? 1));
+    $swrd = buildSimpleSearchKeyword($baseAddress, $dong, $ho);
 
-    // type에 따라 검색 방식 분기
-    // all/building: 도로명주소검색 API (정확한 결과)
-    // complex: 간편검색 API (집합건물은 도로명주소검색에서 안 나옴)
-    if ($type === 'complex') {
-        // 동/호 지정 시: swrd에 동/호를 포함시켜 등기소가 직접 필터링
-        if ($dong || $ho) {
-            $swrd = $sigungu . ' ' . $road . ' ' . $no . ($no2 ? '-' . $no2 : '');
-            if ($dong) $swrd .= ' ' . $dong . '동';
-            if ($ho) $swrd .= ' ' . $ho . '호';
+    $data = searchSimple($cookieStr, $sido, $swrd, $kindCls, $page);
+    $dataList = $data['dataList'] ?? [];
+    $totalCount = $data['paginationInfo']['totalRecordCount'] ?? count($dataList);
 
-            $data = searchSimple($cookieStr, $sido, $swrd, 'all', $page);
-            $dataList = $data['dataList'] ?? [];
-            $totalCount = $data['paginationInfo']['totalRecordCount'] ?? count($dataList);
-
-            $results = [];
-            foreach ($dataList as $item) {
-                if (($item['real_cls_cd'] ?? '') !== '집합건물') continue;
-                $pin = $item['pin'] ?? '';
-                $itemDong = trim($item['buld_no_buld'] ?? '');
-                $itemHo = trim($item['buld_no_room'] ?? '');
-                $results[] = [
-                    'pin' => $pin,
-                    'pinFormatted' => substr($pin, 0, 4) . '-' . substr($pin, 4, 4) . '-' . substr($pin, 8),
-                    'roadAddress' => $item['rd_addr'] ?? '',
-                    'jibunAddress' => $item['real_indi_cont'] ?? '',
-                    'detail' => trim(($item['buld_name'] ?? '') . ' ' . $itemDong . '동 ' . $itemHo . '호'),
-                    'type' => '집합건물',
-                    'buildingName' => trim($item['buld_name'] ?? ''),
-                    'dong' => $itemDong,
-                    'roomNo' => $itemHo,
-                    'owner' => '',
-                    'status' => $item['use_cls_cd'] ?? '현행',
-                ];
-            }
-
-            echo json_encode([
-                'count' => count($results),
-                'totalCount' => $totalCount,
-                'dong' => $dong ?: null,
-                'ho' => $ho ?: null,
-                'page' => $page,
-                'results' => $results,
-            ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-        } else {
-            // 동/호 없이 전체 목록 (페이지네이션)
-            $swrd = $sigungu . ' ' . $road . ' ' . $no . ($no2 ? '-' . $no2 : '');
-            $data = searchSimple($cookieStr, $sido, $swrd, 'all', $page);
-            $dataList = $data['dataList'] ?? [];
-            $totalCount = $data['paginationInfo']['totalRecordCount'] ?? count($dataList);
-
-            $results = [];
-            foreach ($dataList as $item) {
-                if (($item['real_cls_cd'] ?? '') !== '집합건물') continue;
-                $pin = $item['pin'] ?? '';
-                $itemDong = trim($item['buld_no_buld'] ?? '');
-                $itemHo = trim($item['buld_no_room'] ?? '');
-                $results[] = [
-                    'pin' => $pin,
-                    'pinFormatted' => substr($pin, 0, 4) . '-' . substr($pin, 4, 4) . '-' . substr($pin, 8),
-                    'roadAddress' => $item['rd_addr'] ?? '',
-                    'jibunAddress' => $item['real_indi_cont'] ?? '',
-                    'detail' => trim(($item['buld_name'] ?? '') . ' ' . $itemDong . '동 ' . $itemHo . '호'),
-                    'type' => '집합건물',
-                    'buildingName' => trim($item['buld_name'] ?? ''),
-                    'dong' => $itemDong,
-                    'roomNo' => $itemHo,
-                    'owner' => '',
-                    'status' => $item['use_cls_cd'] ?? '현행',
-                ];
-            }
-
-            echo json_encode([
-                'count' => count($results),
-                'totalCount' => $totalCount,
-                'page' => $page,
-                'results' => $results,
-            ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    $results = [];
+    foreach ($dataList as $item) {
+        if ($type === 'complex' && !isComplexItem($item)) {
+            continue;
         }
-
-    } else {
-        // 토지+건물: 도로명주소 검색 API
-        $data = searchByRoadAddress($cookieStr, $sido, $sigungu, $road, $no, $no2);
-        $dataList = $data['dataList'] ?? [];
-
-        $results = [];
-        foreach ($dataList as $item) {
-            $pin = $item['real_pin'] ?? '';
-            $results[] = [
-                'pin' => $pin,
-                'pinFormatted' => substr($pin, 0, 4) . '-' . substr($pin, 4, 4) . '-' . substr($pin, 8),
-                'roadAddress' => $item['rd_addr'] ?? '',
-                'jibunAddress' => $item['real_indi_cont'] ?? '',
-                'detail' => $item['add_item'] ?? '',
-                'type' => $item['real_cls_name'] ?? '',
-                'buildingName' => trim($item['buld_name'] ?? ''),
-                'owner' => $item['nomprs_name'] ?? '',
-                'status' => $item['rgsbk_use_cls_name'] ?? '',
-            ];
-        }
-
-        echo json_encode([
-            'count' => count($results),
-            'results' => $results,
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $results[] = normalizeSimpleResultItem($item);
     }
+
+    echo json_encode([
+        'count' => count($results),
+        'totalCount' => $totalCount,
+        'page' => $page,
+        'searchBase' => $baseAddress,
+        'searchKeyword' => $swrd,
+        'results' => $results,
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (Exception $e) {
     http_response_code(500);
