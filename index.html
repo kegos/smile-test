@@ -796,7 +796,9 @@ function searchIros(page) {
         queryType = 'complex';
       }
 
-      var url = IROS_API + '?jibun=' + encodeURIComponent(queryJibun || address) + '&type=' + queryType;
+      // IROS kind_cls=coll이 0건 반환하는 문제 대비 → all로 검색 후 프론트에서 필터
+      var apiType = (queryType === 'complex') ? 'all' : queryType;
+      var url = IROS_API + '?jibun=' + encodeURIComponent(queryJibun || address) + '&type=' + apiType;
       if (queryType === 'complex') {
         var dong = dongSelect.value.trim();
         var ho = hoInput.value.trim();
@@ -810,6 +812,13 @@ function searchIros(page) {
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
+      // complex 요청이면 집합건물만 필터
+      if (queryType === 'complex' && data.results) {
+        data.results = data.results.filter(function(r) {
+          return r.type === '집합건물' || r.dong || r.roomNo;
+        });
+        data.count = data.results.length;
+      }
 
       statusEl.style.display = 'none';
 

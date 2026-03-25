@@ -370,10 +370,7 @@ try {
     $page = max(1, intval($_GET['page'] ?? 1));
     $swrd = buildSimpleSearchKeyword($baseAddress, $dong, $ho);
 
-    // complex(집합건물) 검색 시 kind_cls=coll이 IROS에서 0건 반환하는 경우 대비
-    // → all로 검색 후 PHP에서 isComplexItem 필터 (line 379)
-    $searchKindCls = ($type === 'complex') ? 'all' : $kindCls;
-    $data = searchSimple($cookieStr, $sido, $swrd, $searchKindCls, $page);
+    $data = searchSimple($cookieStr, $sido, $swrd, $kindCls, $page);
     $dataList = $data['dataList'] ?? [];
     $totalCount = $data['paginationInfo']['totalRecordCount'] ?? count($dataList);
 
