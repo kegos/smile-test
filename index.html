@@ -975,7 +975,9 @@ function resolveJibunForIros(address) {
         return (item.roadAddrPart1 || item.roadAddr) === address || item.jibunAddr === address;
       }) || list[0];
 
-      var jibunAddress = (picked.jibunAddr || '').trim();
+      // jibunAddr에서 건물명 제거 (예: "해운대구 우동 1407 해운대두산위브더제니스" → "해운대구 우동 1407")
+      var rawJibun = (picked.jibunAddr || '').trim();
+      var jibunAddress = rawJibun.replace(/^(.+\s\d+(-\d+)?)\s+.+$/, '$1');
       var roadAddress = (picked.roadAddrPart1 || picked.roadAddr || '').trim();
 
       if (roadAddress) selectedAddress = roadAddress;
