@@ -1378,24 +1378,9 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
   .then(function(result) {
     if (result.type === 'json') {
       if (result.status === 202) {
-        var maxRetries = 10;
+        var maxRetries = 20;
         if (retryCount >= maxRetries) {
-          // 타임아웃 시 다른 파라미터 조합으로 재시도
-          var altEntry = {};
-          for (var k in entry) altEntry[k] = entry[k];
-          var curDong = entry['동명칭'] || '';
-          var curHo = entry['호명칭'] || '';
-          // 변형 1: dong을 건물명으로, ho에서 "호" 제거
-          if (curDong === '동명칭 없음') {
-            altEntry['동명칭'] = entryName;
-            altEntry['호명칭'] = curHo.replace(/호$/, '');
-          } else {
-            // 변형 2: 원본 그대로 (이미 시도했으면 포기)
-            throw new Error('PDF 생성 시간 초과. 잠시 후 다시 시도해주세요.');
-          }
-          console.log('[건축물대장] 파라미터 변형 재시도:', JSON.stringify(altEntry));
-          progressText.textContent = '② 다른 방식으로 재시도...';
-          return fetchBuildingPdf(roadAddress, altEntry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl, 0);
+          throw new Error('PDF 생성 시간 초과 (' + maxRetries + '회). 잠시 후 다시 시도해주세요.');
         }
         var pct = 50 + Math.min(retryCount * 4, 40);
         barFill.style.width = pct + '%';
