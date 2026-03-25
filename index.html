@@ -1333,8 +1333,7 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
   var entryName = entry['건축물명칭'] || entry.b_name || buildingName || '';
   var entryDong = entry['동명칭'] || entry.dong || dong || '';
   var entryHo   = entry['호명칭'] || entry.ho || roomNo || '';
-  // 호명칭에서 "호" 접미사 제거 (API는 숫자/명칭만)
-  entryHo = entryHo.replace(/호$/, '');
+  // 목록에서 온 호명칭은 그대로 사용 (예: "1101호", "B1504" 등 형식 다양)
   // 동명칭 없음인 경우 건물명을 dong에 사용 (APICK 가이드 권장)
   if (!entryDong || entryDong === '동명칭 없음') {
     entryDong = entryName;
