@@ -1324,7 +1324,8 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
   });
 }
 
-function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl) {
+function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl, retryCount) {
+  retryCount = retryCount || 0;
   clickedBtn.textContent = 'PDF 발급중...';
 
   // APICK API 필수 4개: address, b_name, dong, ho
@@ -1361,13 +1362,17 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
   .then(function(result) {
     if (result.type === 'json') {
       if (result.status === 202) {
-        // 아직 처리중 — 3초 후 재시도
-        barFill.style.width = '60%';
-        progressText.textContent = '② PDF 생성 대기중...';
+        var maxRetries = 20; // 최대 20회 (약 100초)
+        if (retryCount >= maxRetries) {
+          throw new Error('PDF 생성 시간 초과 (' + maxRetries + '회 시도). 잠시 후 다시 시도해주세요.');
+        }
+        var pct = 50 + Math.min(retryCount * 2, 40);
+        barFill.style.width = pct + '%';
+        progressText.textContent = '② PDF 생성 대기중... (' + (retryCount + 1) + '/' + maxRetries + ')';
         return new Promise(function(resolve) {
           setTimeout(function() {
-            resolve(fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl));
-          }, 3000);
+            resolve(fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl, retryCount + 1));
+          }, 5000);
         });
       }
       console.error('[건축물대장] API error:', JSON.stringify(result.data));
