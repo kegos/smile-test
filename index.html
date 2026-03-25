@@ -705,7 +705,9 @@ function searchAddress(keyword) {
         div.addEventListener('mousedown', function(e) {
           e.preventDefault();
           selectedAddress = item.roadAddrPart1 || item.roadAddr;
-          selectedJibun = item.jibunAddr || '';
+          // jibunAddr에서 건물명 제거 (예: "우동 1407 해운대두산위브" → "우동 1407")
+          var rawJibun = (item.jibunAddr || '').trim();
+          selectedJibun = rawJibun.replace(/^(.+\s\d+(-\d+)?)\s+\D.*$/, '$1');
           input.value = selectedAddress;
           dropdown.classList.remove('show');
 
@@ -977,7 +979,7 @@ function resolveJibunForIros(address) {
 
       // jibunAddr에서 건물명 제거 (예: "해운대구 우동 1407 해운대두산위브더제니스" → "해운대구 우동 1407")
       var rawJibun = (picked.jibunAddr || '').trim();
-      var jibunAddress = rawJibun.replace(/^(.+\s\d+(-\d+)?)\s+.+$/, '$1');
+      var jibunAddress = rawJibun.replace(/^(.+\s\d+(-\d+)?)\s+\D.*$/, '$1');
       var roadAddress = (picked.roadAddrPart1 || picked.roadAddr || '').trim();
 
       if (roadAddress) selectedAddress = roadAddress;
