@@ -204,14 +204,13 @@ if ($action === 'building_view') {
         exit;
     }
 
-    // APICK API에 전달할 필드: address 필수, 나머지는 클라이언트에서 온 값 그대로
-    $allowedFields = ['address', 'b_name', 'dong', 'ho', 'b_code', 'idx', 'seq', 'no', 'type', 'id'];
-    $postFields = ['address' => $address];
-    foreach ($input as $key => $val) {
-        if ($key !== 'address' && in_array($key, $allowedFields) && $val !== '') {
-            $postFields[$key] = $val;
-        }
-    }
+    // APICK API 필수 4개 파라미터: address, b_name, dong, ho
+    $postFields = [
+        'address' => $address,
+        'b_name'  => isset($input['b_name']) ? $input['b_name'] : '',
+        'dong'    => isset($input['dong'])   ? $input['dong']   : '',
+        'ho'      => isset($input['ho'])     ? $input['ho']     : '',
+    ];
 
     $ch = curl_init('https://apick.app/rest/building_register');
     curl_setopt_array($ch, [

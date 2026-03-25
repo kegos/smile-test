@@ -1336,15 +1336,13 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
 function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl) {
   clickedBtn.textContent = 'PDF 발급중...';
 
-  // entry 전체를 기본으로 사용하고, address와 fallback dong/ho를 추가
-  var body = {};
-  var keys = Object.keys(entry);
-  for (var k = 0; k < keys.length; k++) {
-    if (entry[keys[k]] && entry[keys[k]] !== '동명칭 없음' && entry[keys[k]] !== '호명칭 없음') {
-      body[keys[k]] = entry[keys[k]];
-    }
-  }
-  body.address = roadAddress;
+  // APICK API 필수 4개: address, b_name, dong, ho (모두 전달해야 함)
+  var body = {
+    address: roadAddress,
+    b_name: entry.b_name || '',
+    dong: entry.dong || '',
+    ho: entry.ho || ''
+  };
   // entry에 dong/ho가 없으면 iros 검색값으로 fallback
   if (!body.dong && dong) body.dong = dong;
   if (!body.ho && roomNo) body.ho = roomNo;
@@ -1454,8 +1452,8 @@ function showBuildingModal(list, onSelect, onCancel) {
     var nameEl = document.createElement('div');
     nameEl.className = 'bm-name';
     var nameText = entry.b_name || '(건물명 없음)';
-    if (entry.dong && entry.dong !== '동명칭 없음') nameText += ' ' + entry.dong;
-    if (entry.ho && entry.ho !== '호명칭 없음') nameText += ' ' + entry.ho;
+    if (entry.dong && entry.dong !== '동명칭 없음') nameText += ' ' + entry.dong + '동';
+    if (entry.ho && entry.ho !== '호명칭 없음') nameText += ' ' + entry.ho + '호';
     nameEl.textContent = (idx + 1) + '. ' + nameText;
 
     var areaEl = document.createElement('div');
