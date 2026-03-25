@@ -807,18 +807,21 @@ function searchIros(page) {
         if (!dong && !ho) url += '&page=' + page;
       }
 
-      return fetch(url);
+      return fetch(url)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          // complex 요청이면 집합건물만 필터 (queryType 스코프 내)
+          if (queryType === 'complex' && data.results) {
+            data.results = data.results.filter(function(r) {
+              return r.type === '집합건물' || r.dong || r.roomNo;
+            });
+            data.count = data.results.length;
+          }
+          return data;
+        });
     })
-    .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
-      // complex 요청이면 집합건물만 필터
-      if (queryType === 'complex' && data.results) {
-        data.results = data.results.filter(function(r) {
-          return r.type === '집합건물' || r.dong || r.roomNo;
-        });
-        data.count = data.results.length;
-      }
 
       statusEl.style.display = 'none';
 
