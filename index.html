@@ -3,9 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>등기부등본 조회</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -648,7 +645,7 @@ input.addEventListener('keydown', function(e) {
   }
 });
 
-btn.addEventListener('click', function() { console.log('[검색] 버튼 클릭'); searchIros(); });
+btn.addEventListener('click', function() { searchIros(); });
 
 // 바깥 클릭 시 드롭다운 닫기
 document.addEventListener('mousedown', function(e) {
@@ -767,9 +764,8 @@ function searchAddress(keyword) {
 
 // 등기소 고유번호 조회
 function searchIros(page) {
-  console.log('[검색] searchIros 호출, input:', input.value, 'selectedAddress:', selectedAddress);
   var address = input.value.trim();
-  if (!address) { console.log('[검색] 주소 비어있음 — 무시'); input.focus(); return; }
+  if (!address) { input.focus(); return; }
 
   page = page || 1;
   currentPage = page;
@@ -1284,19 +1280,16 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
     }
 
     barFill.style.width = '40%';
-    console.log('[건축물대장] list entries:', JSON.stringify(list.slice(0, 3)), 'dong:', dong, 'roomNo:', roomNo);
 
     // roomNo(호)로 매칭되는 항목 자동 선택
     var matched = null;
     if (roomNo && list.length > 1) {
       var roomStr = String(roomNo).replace(/[^0-9]/g, '');
-      console.log('[건축물대장] 자동매칭 시도 - roomNo:', roomStr, 'entry sample:', JSON.stringify(list[0]));
       matched = list.filter(function(e) {
         var hoVal = e['호명칭'] || e.ho || '';
         var entryHo = String(hoVal).replace(/[^0-9]/g, '');
         return entryHo === roomStr;
       });
-      console.log('[건축물대장] 매칭 결과:', matched.length, '건');
       // dong도 있으면 추가 필터
       if (dong && matched.length > 1) {
         var dongStr = String(dong).replace(/[^0-9]/g, '');
@@ -1367,7 +1360,6 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
     dong: entryDong,
     ho: entryHo
   };
-  console.log('[건축물대장] building_view body:', JSON.stringify(body));
 
   return fetch(APICK_API + '?action=building_view', {
     method: 'POST',
