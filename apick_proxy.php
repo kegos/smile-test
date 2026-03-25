@@ -236,7 +236,22 @@ if ($action === 'building_view') {
     }
 
     $body = substr($response, $headerSize);
+    $headerStr = substr($response, 0, $headerSize);
     if (!$contentType) $contentType = '';
+
+    // APICK 응답 헤더에서 result 값 추출 (result: 1=성공, 2=처리중)
+    $apickResult = '';
+    if (preg_match('/^result:\s*(.+)$/mi', $headerStr, $m)) {
+        $apickResult = trim($m[1]);
+    }
+
+    // result=2이면 처리중 (PDF 생성 대기)
+    if ($apickResult === '2') {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(202);
+        echo json_encode(['status' => 'processing', 'message' => 'Building register generating...']);
+        exit;
+    }
 
     // JSON 응답 = 에러 또는 처리중
     if (strpos($contentType, 'json') !== false || strpos($contentType, 'text/') !== false) {
