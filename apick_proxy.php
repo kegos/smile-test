@@ -196,9 +196,6 @@ if ($action === 'building_list') {
 // ── 건축물대장 열람 (PDF)
 if ($action === 'building_view') {
     $address = isset($input['address']) ? $input['address'] : '';
-    $bName   = isset($input['b_name'])  ? $input['b_name']  : '';
-    $dong    = isset($input['dong'])    ? $input['dong']    : '';
-    $ho      = isset($input['ho'])      ? $input['ho']      : '';
 
     if (!$address) {
         header('Content-Type: application/json; charset=utf-8');
@@ -207,10 +204,14 @@ if ($action === 'building_view') {
         exit;
     }
 
+    // APICK API에 전달할 필드: address 필수, 나머지는 클라이언트에서 온 값 그대로
+    $allowedFields = ['address', 'b_name', 'dong', 'ho', 'b_code', 'idx', 'seq', 'no', 'type', 'id'];
     $postFields = ['address' => $address];
-    if ($bName) $postFields['b_name'] = $bName;
-    if ($dong)  $postFields['dong']   = $dong;
-    if ($ho)    $postFields['ho']     = $ho;
+    foreach ($input as $key => $val) {
+        if ($key !== 'address' && in_array($key, $allowedFields) && $val !== '') {
+            $postFields[$key] = $val;
+        }
+    }
 
     $ch = curl_init('https://apick.app/rest/building_register');
     curl_setopt_array($ch, [

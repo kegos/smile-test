@@ -1264,10 +1264,22 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
     var matched = null;
     if (roomNo && list.length > 1) {
       var roomStr = String(roomNo).replace(/[^0-9]/g, '');
+      console.log('[건축물대장] 자동매칭 시도 - roomNo:', roomStr, 'entry keys:', Object.keys(list[0]));
       matched = list.filter(function(e) {
-        var entryHo = String(e.ho || '').replace(/[^0-9]/g, '');
+        // ho 필드 또는 다른 가능한 필드명에서 호수 찾기
+        var hoVal = e.ho || e.room || e.room_no || e.roomNo || e.num || '';
+        var entryHo = String(hoVal).replace(/[^0-9]/g, '');
+        // entry의 모든 값에서 호수 매칭 시도 (필드명을 모르는 경우)
+        if (!entryHo && roomStr) {
+          var vals = Object.values(e);
+          for (var v = 0; v < vals.length; v++) {
+            var cleaned = String(vals[v] || '').replace(/[^0-9]/g, '');
+            if (cleaned === roomStr) { entryHo = cleaned; break; }
+          }
+        }
         return entryHo === roomStr;
       });
+      console.log('[건축물대장] 매칭 결과:', matched.length, '건');
       // dong도 있으면 추가 필터
       if (dong && matched.length > 1) {
         var dongStr = String(dong).replace(/[^0-9]/g, '');
@@ -1324,14 +1336,19 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
 function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl) {
   clickedBtn.textContent = 'PDF 발급중...';
 
-  var body = { address: roadAddress };
-  if (entry.b_name) body.b_name = entry.b_name;
-  // entry의 동/호 우선, placeholder면 iros 검색값으로 fallback
-  var effectiveDong = (entry.dong && entry.dong !== '동명칭 없음') ? entry.dong : (dong || '');
-  var effectiveHo   = (entry.ho && entry.ho !== '호명칭 없음') ? entry.ho : (roomNo || '');
-  if (effectiveDong) body.dong = effectiveDong;
-  if (effectiveHo)   body.ho = effectiveHo;
-  console.log('[건축물대장] building_view body:', JSON.stringify(body), 'entry:', JSON.stringify(entry));
+  // entry 전체를 기본으로 사용하고, address와 fallback dong/ho를 추가
+  var body = {};
+  var keys = Object.keys(entry);
+  for (var k = 0; k < keys.length; k++) {
+    if (entry[keys[k]] && entry[keys[k]] !== '동명칭 없음' && entry[keys[k]] !== '호명칭 없음') {
+      body[keys[k]] = entry[keys[k]];
+    }
+  }
+  body.address = roadAddress;
+  // entry에 dong/ho가 없으면 iros 검색값으로 fallback
+  if (!body.dong && dong) body.dong = dong;
+  if (!body.ho && roomNo) body.ho = roomNo;
+  console.log('[건축물대장] building_view body:', JSON.stringify(body));
 
   return fetch(APICK_API + '?action=building_view', {
     method: 'POST',
@@ -1357,7 +1374,10 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
           }, 3000);
         });
       }
-      throw new Error((result.data && result.data.error) || '건축물대장 발급 실패');
+      console.error('[건축물대장] API error:', JSON.stringify(result.data));
+      var errMsg = (result.data && result.data.error) || '건축물대장 발급 실패';
+      if (result.data && result.data.detail) errMsg += ' (' + JSON.stringify(result.data.detail) + ')';
+      throw new Error(errMsg);
     }
 
     // PDF 수신 성공
