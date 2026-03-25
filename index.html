@@ -1258,6 +1258,32 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
     }
 
     barFill.style.width = '40%';
+    console.log('[건축물대장] list entries:', JSON.stringify(list.slice(0, 3)), 'dong:', dong, 'roomNo:', roomNo);
+
+    // roomNo(호)로 매칭되는 항목 자동 선택
+    var matched = null;
+    if (roomNo && list.length > 1) {
+      var roomStr = String(roomNo).replace(/[^0-9]/g, '');
+      matched = list.filter(function(e) {
+        var entryHo = String(e.ho || '').replace(/[^0-9]/g, '');
+        return entryHo === roomStr;
+      });
+      // dong도 있으면 추가 필터
+      if (dong && matched.length > 1) {
+        var dongStr = String(dong).replace(/[^0-9]/g, '');
+        var dongMatched = matched.filter(function(e) {
+          var entryDong = String(e.dong || '').replace(/[^0-9]/g, '');
+          return entryDong === dongStr;
+        });
+        if (dongMatched.length > 0) matched = dongMatched;
+      }
+    }
+
+    // 자동 매칭 성공 (1건)
+    if (matched && matched.length === 1) {
+      progressText.textContent = '② PDF 발급중... (자동 매칭)';
+      return fetchBuildingPdf(roadAddress, matched[0], jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+    }
 
     // 단일 항목이면 바로 열람
     if (list.length === 1) {
@@ -1265,12 +1291,12 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
       return fetchBuildingPdf(roadAddress, list[0], jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
     }
 
-    // 복수 항목이면 모달로 선택
-    barFill.style.width = '40%';
-    progressText.textContent = '② ' + list.length + '건 — 항목을 선택하세요';
+    // 매칭 여러건이면 매칭된 것만 표시, 아니면 전체
+    var displayList = (matched && matched.length > 1) ? matched : list;
+    progressText.textContent = '② ' + displayList.length + '건 — 항목을 선택하세요';
     progressText.classList.remove('active');
 
-    showBuildingModal(list, function(selected) {
+    showBuildingModal(displayList, function(selected) {
       barFill.style.width = '50%';
       progressText.textContent = '② PDF 발급중...';
       progressText.classList.add('active');
@@ -1301,10 +1327,11 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
   var body = { address: roadAddress };
   if (entry.b_name) body.b_name = entry.b_name;
   // entry의 동/호 우선, placeholder면 iros 검색값으로 fallback
-  var effectiveDong = (entry.dong && entry.dong !== '동명칭 없음') ? entry.dong : dong;
-  var effectiveHo   = (entry.ho && entry.ho !== '호명칭 없음') ? entry.ho : roomNo;
+  var effectiveDong = (entry.dong && entry.dong !== '동명칭 없음') ? entry.dong : (dong || '');
+  var effectiveHo   = (entry.ho && entry.ho !== '호명칭 없음') ? entry.ho : (roomNo || '');
   if (effectiveDong) body.dong = effectiveDong;
   if (effectiveHo)   body.ho = effectiveHo;
+  console.log('[건축물대장] building_view body:', JSON.stringify(body), 'entry:', JSON.stringify(entry));
 
   return fetch(APICK_API + '?action=building_view', {
     method: 'POST',
