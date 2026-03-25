@@ -1033,7 +1033,9 @@ function makeRegistryFilename(jibunAddr, itemType, dong, roomNo) {
 function openIrosViewer(pin, jibunAddr, itemType, dong, roomNo) {
   var clickedBtn = event.target;
   var actionsEl = clickedBtn.parentElement;
-  clickedBtn.disabled = true;
+  // 같은 행의 모든 버튼 비활성화 (중복 호출 방지)
+  var siblingBtns = actionsEl.querySelectorAll('button');
+  siblingBtns.forEach(function(b) { b.disabled = true; });
   clickedBtn.textContent = '등기소 접속중...';
 
   var filename = makeRegistryFilename(jibunAddr, itemType, dong, roomNo);
@@ -1082,14 +1084,14 @@ function openIrosViewer(pin, jibunAddr, itemType, dong, roomNo) {
       toastEl.textContent = '고유번호 복사됨';
       toastEl.classList.remove('show');
     }, 3000);
-    clickedBtn.disabled = false;
+    siblingBtns.forEach(function(b) { b.disabled = false; });
     clickedBtn.textContent = '등기부 열람';
   });
 }
 
 function pollAndDownload(icId, btn, actionsEl, filename, barFill, progressText, attempt) {
   if (attempt > 15) {
-    btn.disabled = false;
+    actionsEl.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
     btn.textContent = '등기부 열람';
     progressText.textContent = '타임아웃 — 다시 시도하세요';
     progressText.classList.remove('active');
@@ -1136,8 +1138,8 @@ function pollAndDownload(icId, btn, actionsEl, filename, barFill, progressText, 
       // Google Drive에 자동 저장
       uploadToDrive(blob, filename);
 
-      // 버튼 복원 + 다운로드 버튼 추가
-      btn.disabled = false;
+      // 같은 행의 모든 버튼 복원 + 다운로드 버튼 추가
+      actionsEl.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
       btn.textContent = '등기부 열람';
 
       var oldPdfBtn = actionsEl.querySelector('.btn-pdf');
@@ -1237,10 +1239,11 @@ function makeBuildingFilename(jibunAddr, itemType, dong, roomNo) {
 }
 
 function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn) {
-  clickedBtn.disabled = true;
-  clickedBtn.textContent = '조회중...';
-
   var actionsEl = clickedBtn.parentElement;
+  // 같은 행의 모든 버튼 비활성화 (중복 호출 방지)
+  var siblingBtns = actionsEl.querySelectorAll('button');
+  siblingBtns.forEach(function(b) { b.disabled = true; });
+  clickedBtn.textContent = '조회중...';
 
   // 진행 표시 UI
   var oldProgress = actionsEl.parentElement.querySelector('.iros-progress');
@@ -1326,7 +1329,7 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
       return fetchBuildingPdf(roadAddress, selected, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl);
     }, function() {
       // 취소
-      clickedBtn.disabled = false;
+      siblingBtns.forEach(function(b) { b.disabled = false; });
       clickedBtn.textContent = '건축물대장';
       if (progressEl.parentElement) progressEl.remove();
     });
@@ -1339,7 +1342,7 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
       toastEl.textContent = '고유번호 복사됨';
       toastEl.classList.remove('show');
     }, 3000);
-    clickedBtn.disabled = false;
+    siblingBtns.forEach(function(b) { b.disabled = false; });
     clickedBtn.textContent = '건축물대장';
   });
 }
@@ -1418,7 +1421,9 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
     // Google Drive 건축물대장 폴더에 저장
     uploadToDriveFolder(blob, filename, DRIVE_BUILDING_FOLDER_ID);
 
-    clickedBtn.disabled = false;
+    // 같은 행의 모든 버튼 복원
+    var allBtns = actionsEl.querySelectorAll('button');
+    allBtns.forEach(function(b) { b.disabled = false; });
     clickedBtn.textContent = '건축물대장';
 
     toastEl.textContent = '건축물대장 열람 완료 — Drive 저장중...';
@@ -1436,7 +1441,8 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
       toastEl.textContent = '고유번호 복사됨';
       toastEl.classList.remove('show');
     }, 3000);
-    clickedBtn.disabled = false;
+    var allBtns = actionsEl.querySelectorAll('button');
+    allBtns.forEach(function(b) { b.disabled = false; });
     clickedBtn.textContent = '건축물대장';
   });
 }
