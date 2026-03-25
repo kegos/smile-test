@@ -878,7 +878,7 @@ function searchIros(page) {
           buildingBtn.textContent = '건축물대장';
           buildingBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            openBuildingRegister(item.roadAddress, item.jibunAddress, item.type, item.dong, item.roomNo, buildingBtn);
+            openBuildingRegister(item.roadAddress, item.jibunAddress, item.type, item.dong, item.roomNo, item.buildingName, buildingBtn);
           });
         }
 
@@ -1216,7 +1216,7 @@ function makeBuildingFilename(jibunAddr, itemType, dong, roomNo) {
   return parts.join(' ') + '.pdf';
 }
 
-function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo, clickedBtn) {
+function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn) {
   clickedBtn.disabled = true;
   clickedBtn.textContent = '조회중...';
 
@@ -1294,13 +1294,13 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
     // 자동 매칭 성공 (1건)
     if (matched && matched.length === 1) {
       progressText.textContent = '② PDF 발급중... (자동 매칭)';
-      return fetchBuildingPdf(roadAddress, matched[0], jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+      return fetchBuildingPdf(roadAddress, matched[0], jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl);
     }
 
     // 단일 항목이면 바로 열람
     if (list.length === 1) {
       progressText.textContent = '② PDF 발급중...';
-      return fetchBuildingPdf(roadAddress, list[0], jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+      return fetchBuildingPdf(roadAddress, list[0], jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl);
     }
 
     // 매칭 여러건이면 매칭된 것만 표시, 아니면 전체
@@ -1312,7 +1312,7 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
       barFill.style.width = '50%';
       progressText.textContent = '② PDF 발급중...';
       progressText.classList.add('active');
-      return fetchBuildingPdf(roadAddress, selected, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl);
+      return fetchBuildingPdf(roadAddress, selected, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl);
     }, function() {
       // 취소
       clickedBtn.disabled = false;
@@ -1333,19 +1333,16 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
   });
 }
 
-function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl) {
+function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl) {
   clickedBtn.textContent = 'PDF 발급중...';
 
   // APICK API 필수 4개: address, b_name, dong, ho (모두 전달해야 함)
   var body = {
     address: roadAddress,
-    b_name: entry.b_name || '',
-    dong: entry.dong || '',
-    ho: entry.ho || ''
+    b_name: entry.b_name || buildingName || '',
+    dong: entry.dong || dong || '',
+    ho: entry.ho || roomNo || ''
   };
-  // entry에 dong/ho가 없으면 iros 검색값으로 fallback
-  if (!body.dong && dong) body.dong = dong;
-  if (!body.ho && roomNo) body.ho = roomNo;
   console.log('[건축물대장] building_view body:', JSON.stringify(body));
 
   return fetch(APICK_API + '?action=building_view', {
@@ -1368,7 +1365,7 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
         progressText.textContent = '② PDF 생성 대기중...';
         return new Promise(function(resolve) {
           setTimeout(function() {
-            resolve(fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, clickedBtn, actionsEl, barFill, progressText, progressEl));
+            resolve(fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl));
           }, 3000);
         });
       }
