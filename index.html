@@ -241,6 +241,9 @@
     cursor: pointer; white-space: nowrap;
   }
   .btn-building:hover { background: #15803d; }
+  .btn-iros:disabled, .btn-building:disabled, .btn-copy:disabled {
+    opacity: 0.4; cursor: not-allowed; pointer-events: none;
+  }
 
   /* 건축물대장 선택 모달 */
   .building-modal-overlay {
