@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>등기부등본 조회</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -642,7 +645,7 @@ input.addEventListener('keydown', function(e) {
   }
 });
 
-btn.addEventListener('click', function() { searchIros(); });
+btn.addEventListener('click', function() { console.log('[검색] 버튼 클릭'); searchIros(); });
 
 // 바깥 클릭 시 드롭다운 닫기
 document.addEventListener('mousedown', function(e) {
@@ -759,8 +762,9 @@ function searchAddress(keyword) {
 
 // 등기소 고유번호 조회
 function searchIros(page) {
+  console.log('[검색] searchIros 호출, input:', input.value, 'selectedAddress:', selectedAddress);
   var address = input.value.trim();
-  if (!address) { input.focus(); return; }
+  if (!address) { console.log('[검색] 주소 비어있음 — 무시'); input.focus(); return; }
 
   page = page || 1;
   currentPage = page;
