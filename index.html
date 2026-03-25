@@ -1264,19 +1264,10 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
     var matched = null;
     if (roomNo && list.length > 1) {
       var roomStr = String(roomNo).replace(/[^0-9]/g, '');
-      console.log('[건축물대장] 자동매칭 시도 - roomNo:', roomStr, 'entry keys:', Object.keys(list[0]));
+      console.log('[건축물대장] 자동매칭 시도 - roomNo:', roomStr, 'entry sample:', JSON.stringify(list[0]));
       matched = list.filter(function(e) {
-        // ho 필드 또는 다른 가능한 필드명에서 호수 찾기
-        var hoVal = e.ho || e.room || e.room_no || e.roomNo || e.num || '';
+        var hoVal = e['호명칭'] || e.ho || '';
         var entryHo = String(hoVal).replace(/[^0-9]/g, '');
-        // entry의 모든 값에서 호수 매칭 시도 (필드명을 모르는 경우)
-        if (!entryHo && roomStr) {
-          var vals = Object.values(e);
-          for (var v = 0; v < vals.length; v++) {
-            var cleaned = String(vals[v] || '').replace(/[^0-9]/g, '');
-            if (cleaned === roomStr) { entryHo = cleaned; break; }
-          }
-        }
         return entryHo === roomStr;
       });
       console.log('[건축물대장] 매칭 결과:', matched.length, '건');
@@ -1336,14 +1327,24 @@ function openBuildingRegister(roadAddress, jibunAddress, itemType, dong, roomNo,
 function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, roomNo, buildingName, clickedBtn, actionsEl, barFill, progressText, progressEl) {
   clickedBtn.textContent = 'PDF 발급중...';
 
-  // APICK API 필수 4개: address, b_name, dong, ho (빈 값 불허)
+  // APICK API 필수 4개: address, b_name, dong, ho
+  // entry 필드명은 한글: 건축물명칭, 동명칭, 호명칭, 연면적
+  var entryName = entry['건축물명칭'] || entry.b_name || buildingName || '';
+  var entryDong = entry['동명칭'] || entry.dong || dong || '';
+  var entryHo   = entry['호명칭'] || entry.ho || roomNo || '';
+  // 호명칭에서 "호" 접미사 제거 (API는 숫자/명칭만)
+  entryHo = entryHo.replace(/호$/, '');
+  // 동명칭 없음인 경우 건물명을 dong에 사용 (APICK 가이드 권장)
+  if (!entryDong || entryDong === '동명칭 없음') {
+    entryDong = entryName;
+  }
   var body = {
     address: roadAddress,
-    b_name: entry.b_name || buildingName || '건물명 없음',
-    dong: entry.dong || dong || '동명칭 없음',
-    ho: entry.ho || roomNo || '호명칭 없음'
+    b_name: entryName,
+    dong: entryDong,
+    ho: entryHo
   };
-  console.log('[건축물대장] building_view body:', JSON.stringify(body), 'entry:', JSON.stringify(entry));
+  console.log('[건축물대장] building_view body:', JSON.stringify(body));
 
   return fetch(APICK_API + '?action=building_view', {
     method: 'POST',
@@ -1387,9 +1388,10 @@ function fetchBuildingPdf(roadAddress, entry, jibunAddress, itemType, dong, room
     var url = URL.createObjectURL(blob);
     window.open(url, '_blank');
 
-    // entry의 동/호 우선 사용 (APICK 실제 선택값), fallback으로 iros 검색값
-    var fileDong = (entry.dong && entry.dong !== '동명칭 없음') ? entry.dong : dong;
-    var fileHo   = (entry.ho && entry.ho !== '호명칭 없음') ? entry.ho : roomNo;
+    var fileDong = entry['동명칭'] || entry.dong || dong || '';
+    if (fileDong === '동명칭 없음') fileDong = '';
+    var fileHo = (entry['호명칭'] || entry.ho || roomNo || '').replace(/호$/, '');
+    if (fileHo === '호명칭 없음') fileHo = '';
     var filename = makeBuildingFilename(jibunAddress, itemType, fileDong, fileHo);
 
     // Google Drive 건축물대장 폴더에 저장
@@ -1448,30 +1450,18 @@ function showBuildingModal(list, onSelect, onCancel) {
 
     var nameEl = document.createElement('div');
     nameEl.className = 'bm-name';
-    var nameText = entry.b_name || '(건물명 없음)';
-    if (entry.dong && entry.dong !== '동명칭 없음') nameText += ' ' + entry.dong + '동';
-    if (entry.ho && entry.ho !== '호명칭 없음') nameText += ' ' + entry.ho + '호';
+    var bName = entry['건축물명칭'] || entry.b_name || '(건물명 없음)';
+    var bDong = entry['동명칭'] || entry.dong || '';
+    var bHo   = entry['호명칭'] || entry.ho || '';
+    var nameText = bName;
+    if (bDong && bDong !== '동명칭 없음') nameText += ' ' + bDong;
+    if (bHo && bHo !== '호명칭 없음') nameText += ' ' + bHo;
     nameEl.textContent = (idx + 1) + '. ' + nameText;
 
     var areaEl = document.createElement('div');
     areaEl.className = 'bm-area';
-    // entry의 모든 유용한 필드를 표시
-    var details = [];
-    if (entry.area) details.push('연면적 ' + entry.area);
-    if (entry.type) details.push(entry.type);
-    if (entry.purpose) details.push(entry.purpose);
-    if (entry.floor) details.push(entry.floor);
-    // 알 수 없는 필드도 표시 (디버깅 겸 구분용)
-    if (details.length === 0) {
-      var keys = Object.keys(entry);
-      for (var k = 0; k < keys.length; k++) {
-        var key = keys[k];
-        if (['b_name','dong','ho','area','type','purpose','floor'].indexOf(key) === -1 && entry[key] && entry[key] !== '동명칭 없음' && entry[key] !== '호명칭 없음') {
-          details.push(key + ': ' + entry[key]);
-        }
-      }
-    }
-    if (details.length > 0) areaEl.textContent = details.join(' · ');
+    var areaVal = entry['연면적'] || entry.area || '';
+    if (areaVal) areaEl.textContent = areaVal;
 
     item.appendChild(nameEl);
     if (details.length > 0) item.appendChild(areaEl);
