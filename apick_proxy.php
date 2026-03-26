@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-define('APICK_KEY', '644e422dc7602340523efc59c70f53e4');
+require_once __DIR__ . '/env.php';
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 $input = json_decode(file_get_contents('php://input'), true);
 if (!$input) $input = [];
